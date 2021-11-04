@@ -1,5 +1,8 @@
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
+use deno_ast::swc::parser::Syntax;
+use deno_ast::view as ast_view;
+use deno_ast::Diagnostic;
+use deno_ast::MediaType;
+use deno_ast::ParsedSource;
 use structopt::StructOpt;
 
 /// Search for a pattern in a file and display the lines that contain it.
@@ -13,31 +16,37 @@ struct Cli {
 #[derive(Debug)]
 struct ReadFileError(String);
 
-fn main() {
-    // let args = Cli::from_args();
-    // let path = &args.path;
-    // // display 可以转化成需要显示的文案
-    // let path_str: String = path.as_path().display().to_string();
+fn parse_program(
+    file_name: &str,
+    syntax: Syntax,
+    source_code: String,
+) -> Result<ParsedSource, Diagnostic> {
+    deno_ast::parse_program(deno_ast::ParseParams {
+        specifier: file_name.to_string(),
+        media_type: MediaType::Unknown,
+        source: deno_ast::SourceTextInfo::from_string(source_code),
+        capture_tokens: true,
+        maybe_syntax: Some(syntax),
+        scope_analysis: true,
+    })
+}
 
-    // let content = std::fs::read_to_string(&args.path)
-    //     .map_err(|err| ReadFileError(format!("读取文件异常： `{}`: {}", path_str, err)))?;
-    // println!("file content: {}", content);
+fn lint_program(parsed_source: &ParsedSource) -> &ParsedSource {
+    let diagnostics = parsed_source.with_view(|pg| pg);
+    parsed_source
+}
 
-    // Ok(())
+fn main() -> Result<(), ReadFileError> {
+    let args = Cli::from_args();
+    let path = &args.path;
+    // display 可以转化成需要显示的文案
+    let path_str: String = path.as_path().display().to_string();
 
-    let bar = ProgressBar::new(1000);
-    bar.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-            .progress_chars("##-"),
-    );
-    let mut path_str: String = String::from("");
-    for _i in 0..100 {
-        let args = Cli::from_args();
-        path_str = args.path.as_path().display().to_string();
-        bar.inc(1);
-    }
-    bar.println(format!("[+] finished #{}", path_str));
-    bar.finish_with_message("done");
-    std::process::exit(exitcode::OK);
+    let content = std::fs::read_to_string(&args.path)
+        .map_err(|err| ReadFileError(format!("读取文件异常： `{}`: {}", path_str, err)))?;
+    let syntax = deno_ast::get_syntax(MediaType::TypeScript);
+    let ast = parse_program(&path_str, syntax, content).unwrap();
+
+    ast.with_view(|pg| {});
+    Ok(())
 }
