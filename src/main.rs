@@ -43,6 +43,9 @@ fn main() -> Result<(), ReadFileError> {
 
     let content = std::fs::read_to_string(&args.path)
         .map_err(|err| ReadFileError(format!("读取文件异常： `{}`: {}", path_str, err)))?;
+
+    // print!("{}", content);
+
     let syntax = deno_ast::get_syntax(MediaType::TypeScript);
     let ast = parse_program(&path_str, syntax, content).unwrap();
 
