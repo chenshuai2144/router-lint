@@ -47,6 +47,11 @@ fn main() -> Result<(), ReadFileError> {
     let syntax = deno_ast::get_syntax(MediaType::TypeScript);
     let ast = parse_program(&path_str, syntax, content).unwrap();
 
-    ast.with_view(|pg| {});
+    ast.with_view(|program| match (program) {
+        ast_view::Program::Script(script) => {
+            println!("{:?}", script.inner);
+        }
+        _ => {}
+    });
     Ok(())
 }
