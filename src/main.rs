@@ -1,7 +1,3 @@
-use deno_ast::swc::common::comments::Comment;
-use deno_ast::swc::common::comments::CommentKind;
-use deno_ast::swc::common::Span;
-use deno_ast::swc::common::Spanned;
 use deno_ast::swc::parser::Syntax;
 use deno_ast::view::RootNode;
 use deno_ast::Diagnostic;
@@ -44,8 +40,6 @@ fn main() -> Result<(), ReadFileError> {
     let content = std::fs::read_to_string(&args.path)
         .map_err(|err| ReadFileError(format!("读取文件异常： `{}`: {}", path_str, err)))?;
 
-    // print!("{}", content);
-
     let syntax = deno_ast::get_syntax(MediaType::TypeScript);
     let ast = parse_program(&path_str, syntax, content).unwrap();
 
@@ -53,10 +47,10 @@ fn main() -> Result<(), ReadFileError> {
         program
             .comment_container()
             .unwrap()
-            .leading_comments(program.span().lo())
+            .all_comments()
             .for_each(|comment| {
                 let comment_text = comment.text.trim();
-                println!("{}", comment_text);
+                println!("{:?}", comment_text);
             })
     });
     Ok(())
