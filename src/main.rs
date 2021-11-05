@@ -1,5 +1,9 @@
+use deno_ast::swc::common::comments::Comment;
+use deno_ast::swc::common::comments::CommentKind;
+use deno_ast::swc::common::Span;
+use deno_ast::swc::common::Spanned;
 use deno_ast::swc::parser::Syntax;
-use deno_ast::view as ast_view;
+use deno_ast::view::RootNode;
 use deno_ast::Diagnostic;
 use deno_ast::MediaType;
 use deno_ast::ParsedSource;
@@ -31,11 +35,6 @@ fn parse_program(
     })
 }
 
-fn lint_program(parsed_source: &ParsedSource) -> &ParsedSource {
-    let diagnostics = parsed_source.with_view(|pg| pg);
-    parsed_source
-}
-
 fn main() -> Result<(), ReadFileError> {
     let args = Cli::from_args();
     let path = &args.path;
@@ -47,11 +46,15 @@ fn main() -> Result<(), ReadFileError> {
     let syntax = deno_ast::get_syntax(MediaType::TypeScript);
     let ast = parse_program(&path_str, syntax, content).unwrap();
 
-    ast.with_view(|program| match (program) {
-        ast_view::Program::Script(script) => {
-            println!("{:?}", script.inner);
-        }
-        _ => {}
+    ast.with_view(|program| {
+        program
+            .comment_container()
+            .unwrap()
+            .leading_comments(program.span().lo())
+            .for_each(|comment| {
+                let comment_text = comment.text.trim();
+                println!("{}", comment_text);
+            })
     });
     Ok(())
 }

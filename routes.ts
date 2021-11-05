@@ -1,4 +1,5 @@
-﻿export default [
+﻿// qixian-test
+export default [
   {
     path: '/user',
     layout: false,
