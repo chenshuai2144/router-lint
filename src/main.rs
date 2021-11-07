@@ -1,8 +1,11 @@
 use deno_ast::swc::parser::Syntax;
+use deno_ast::view::Program;
 use deno_ast::view::RootNode;
 use deno_ast::Diagnostic;
 use deno_ast::MediaType;
 use deno_ast::ParsedSource;
+use std::collections::HashMap;
+use std::string::String;
 use structopt::StructOpt;
 
 /// Search for a pattern in a file and display the lines that contain it.
@@ -39,19 +42,30 @@ fn main() -> Result<(), ReadFileError> {
 
     let content = std::fs::read_to_string(&args.path)
         .map_err(|err| ReadFileError(format!("读取文件异常： `{}`: {}", path_str, err)))?;
-
     let syntax = deno_ast::get_syntax(MediaType::TypeScript);
     let ast = parse_program(&path_str, syntax, content).unwrap();
-
+    let mut path_map = HashMap::new();
     ast.with_view(|program| {
-        program
-            .comment_container()
-            .unwrap()
-            .all_comments()
-            .for_each(|comment| {
-                let comment_text = comment.text.trim();
-                println!("{:?}", comment_text);
-            })
+        let mut path_span = false;
+        let token_container = program.token_container().unwrap();
+
+        for token in token_container.tokens {
+            let span = token.span;
+            let whitespace_text = program.source_file().unwrap().text().to_string();
+            let line_text = whitespace_text[span.lo().0 as usize..span.hi().0 as usize].to_string();
+
+            if path_span && !line_text.contains(":") {
+                path_map.insert(String::from(&line_text), 20);
+            }
+
+            if line_text.contains("path") || line_text.contains(":") {
+                path_span = true
+            } else {
+                path_span = false
+            }
+        }
     });
+
+    println!("{:?}", path_map);
     Ok(())
 }

@@ -6,5 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 structopt = "0.3.13"
+swc_ecmascript = { version = "0.82.0", features = ["parser"] }
 indicatif = {version = "*", features = ["rayon"]}
 deno_ast = { version = "0.4.1", features = ["transforms", "utils", "visit", "view"] }
