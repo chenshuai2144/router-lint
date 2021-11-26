@@ -39,13 +39,15 @@ pub struct LineAndColumnDisplay {
     column: usize,
     //相关的代码内容
     line_text: Vec<String>,
+    // 当前路由的配置
+    router_source_code: String,
 }
 #[derive(Clone, PartialEq)]
-pub enum RouterSyntaxError {
+pub enum RouteSyntaxError {
     // 重复的路由
     Repeat,
-    // 冗余的路由
-    Redundancy,
+    // 包含 Redirect 冗余的路由
+    RedirectRedundancy,
     // 不推荐继续使用 children
     DeprecatedChildren,
     // Layout 节点不应该设置 component
@@ -55,7 +57,7 @@ pub enum RouterSyntaxError {
 pub struct RouteDiagnostic {
     pub specifier: String,
     pub display_position: Vec<LineAndColumnDisplay>,
-    pub kind: RouterSyntaxError,
+    pub kind: RouteSyntaxError,
     pub source_file_name: String,
 }
 
@@ -64,11 +66,12 @@ pub struct RoutePathObj {
     pub path: String,
     pub parent_path: String,
     pub node_source: String,
+    pub obj_keys: Vec<String>,
     pub display_position: LineAndColumnDisplay,
 }
 
 /**
- * 遍历routers 的结构，可能一直互相嵌套
+ * 遍历routes 的结构，可能一直互相嵌套
  */
 fn loops_router_array(
     array_node: deno_ast::view::Node,
@@ -78,8 +81,15 @@ fn loops_router_array(
     for item in array_node.children() {
         if item.kind() == deno_ast::view::NodeKind::ExprOrSpread {
             let obj = item.children()[0];
+            let obj_keys: Vec<String> = obj
+                .children()
+                .iter()
+                .map(|obj_name| obj_name.children()[0].text().to_string())
+                .collect();
+
             for obj_name in obj.children() {
                 let mut path: String = String::from(parent_path);
+
                 if obj_name.kind() == deno_ast::view::NodeKind::KeyValueProp {
                     let key = obj_name.children()[0];
                     let value = obj_name.children()[1];
@@ -89,10 +99,12 @@ fn loops_router_array(
                                 path: value.text().to_string(),
                                 parent_path: path.clone(),
                                 node_source: obj_name.text().to_string(),
+                                obj_keys: obj_keys.clone(),
                                 display_position: LineAndColumnDisplay {
                                     column: value.start_column(),
                                     line: value.start_line(),
                                     line_text: vec![obj_name.text().to_string()],
+                                    router_source_code: obj.text().to_string(),
                                 },
                             };
                             context.push(route_path_obj);
@@ -130,18 +142,52 @@ fn gen_diagnostic_repeat(
     let route_diagnostic = RouteDiagnostic {
         specifier: node.path.clone(),
         display_position: display_position,
-        kind: RouterSyntaxError::Repeat,
+        kind: RouteSyntaxError::Repeat,
+        source_file_name: source_file_name,
+    };
+    route_diagnostic
+}
+
+fn gen_diagnostic_redirect(node: &RoutePathObj, source_file_name: String) -> RouteDiagnostic {
+    let mut line_text = Vec::new();
+    line_text.push(node.node_source.to_string());
+
+    let mut display_position = Vec::new();
+    display_position.push(node.display_position.clone());
+    let route_diagnostic = RouteDiagnostic {
+        specifier: node.path.clone(),
+        display_position: display_position,
+        kind: RouteSyntaxError::RedirectRedundancy,
+        source_file_name: source_file_name,
+    };
+    route_diagnostic
+}
+
+fn gen_diagnostic_children_key(node: &RoutePathObj, source_file_name: String) -> RouteDiagnostic {
+    let mut line_text = Vec::new();
+    line_text.push(node.node_source.to_string());
+
+    let mut display_position = Vec::new();
+    display_position.push(node.display_position.clone());
+    let route_diagnostic = RouteDiagnostic {
+        specifier: node.path.clone(),
+        display_position: display_position,
+        kind: RouteSyntaxError::DeprecatedChildren,
         source_file_name: source_file_name,
     };
     route_diagnostic
 }
 
 fn print_diagnostic(diagnostic: &RouteDiagnostic) {
-    if diagnostic.kind == RouterSyntaxError::Repeat {
+    if diagnostic.kind == RouteSyntaxError::Repeat {
         print_diagnostic_repeat(diagnostic);
     }
-    if diagnostic.kind == RouterSyntaxError::Redundancy {
-        print_diagnostic_repeat(diagnostic);
+    if diagnostic.kind == RouteSyntaxError::RedirectRedundancy {
+        print_diagnostic_redirect(diagnostic);
+    }
+
+    if diagnostic.kind == RouteSyntaxError::DeprecatedChildren {
+        print_diagnostic_children_key_router(diagnostic);
     }
 }
 
@@ -188,6 +234,59 @@ fn print_diagnostic_repeat(diagnostic: &RouteDiagnostic) {
     println!("{}", message);
 }
 
+fn print_diagnostic_redirect(diagnostic: &RouteDiagnostic) {
+    println!("🚨 redirect 的冗余配置，发现于以下行：",);
+    for line_and_column in &diagnostic.display_position {
+        println!(
+            "   ---> {}:{}:{} 的 {}",
+            diagnostic.source_file_name,
+            line_and_column.line,
+            line_and_column.column,
+            line_and_column.router_source_code
+        );
+    }
+    println!("");
+    println!("redirect 路由中应该只配置 redirect 和 path 两个属性！",);
+}
+
+fn print_diagnostic_children_key_router(diagnostic: &RouteDiagnostic) {
+    println!("🚨 不应该使用 children 来配置子路由： ",);
+    for line_and_column in &diagnostic.display_position {
+        println!(
+            "   ---> {}:{}:{} 的 {}",
+            diagnostic.source_file_name,
+            line_and_column.line,
+            line_and_column.column,
+            line_and_column.router_source_code
+        );
+    }
+    println!("");
+    println!("children 已经废弃，请属于 routes 来代替！",);
+}
+
+fn is_warning_redirect_router(router: RoutePathObj) -> bool {
+    if !router.obj_keys.contains(&String::from("redirect")) {
+        return false;
+    }
+
+    // router 如果包含 redirect，应该只有 redirect 字段和 path 字段
+    if router.obj_keys.len() > 2
+        && router.obj_keys.contains(&String::from("path"))
+        && router.obj_keys.contains(&String::from("redirect"))
+    {
+        return true;
+    }
+
+    false
+}
+
+fn is_warning_children_key_router(router: RoutePathObj) -> bool {
+    if router.obj_keys.contains(&String::from("children")) {
+        return true;
+    }
+    false
+}
+
 fn gen_route_diagnostic(
     path_array: Vec<RoutePathObj>,
     source_file_name: String,
@@ -201,6 +300,14 @@ fn gen_route_diagnostic(
                 path_map.get(&item.path).unwrap(),
                 source_file_name.clone(),
             ));
+        }
+        if is_warning_redirect_router(item.clone()) {
+            route_diagnostic_array.push(gen_diagnostic_redirect(&item, source_file_name.clone()));
+        }
+
+        if is_warning_children_key_router(item.clone()) {
+            route_diagnostic_array
+                .push(gen_diagnostic_children_key(&item, source_file_name.clone()));
         }
         path_map.insert(item.path.to_string(), item.clone());
     });
@@ -231,7 +338,7 @@ fn main() -> Result<(), ReadFileError> {
     });
 
     // 生成错误并且打印出来
-    let diagnostic_list = gen_route_diagnostic(path_array, path_str);
+    let diagnostic_list = gen_route_diagnostic(path_array, path_str.clone());
     if diagnostic_list.len() > 0 {
         diagnostic_list.iter().for_each(|diagnostic| {
             print_diagnostic(diagnostic);

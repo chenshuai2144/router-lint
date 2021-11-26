@@ -5,7 +5,7 @@ export default [
     layout: false,
     routes: [
       {
-        path: '/user',
+        path: './',
         routes: [
           {
             name: 'login',
@@ -31,7 +31,7 @@ export default [
     icon: 'crown',
     access: 'canAdmin',
     component: './Admin',
-    routes: [
+    children: [
       {
         path: '/admin/sub-page',
         name: 'sub-page',
