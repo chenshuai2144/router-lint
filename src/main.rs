@@ -1,6 +1,5 @@
-use deno_ast::swc::common::Span;
 use deno_ast::view::NodeTrait;
-use std::string::String;
+use std::{collections::HashMap, string::String};
 use structopt::StructOpt;
 
 /// Search for a pattern in a file and display the lines that contain it.
@@ -32,17 +31,16 @@ fn parse_program(
     })
 }
 
+#[derive(Clone)]
 pub struct LineAndColumnDisplay {
     // 行号
     line: usize,
     // 列数
     column: usize,
-    /**
-     * 相关的代码内容
-     */
+    //相关的代码内容
     line_text: Vec<String>,
 }
-
+#[derive(Clone, PartialEq)]
 pub enum RouterSyntaxError {
     // 重复的路由
     Repeat,
@@ -56,15 +54,17 @@ pub enum RouterSyntaxError {
 
 pub struct RouteDiagnostic {
     pub specifier: String,
-    pub display_position: LineAndColumnDisplay,
+    pub display_position: Vec<LineAndColumnDisplay>,
     pub kind: RouterSyntaxError,
+    pub source_file_name: String,
 }
 
 #[derive(Clone)]
 pub struct RoutePathObj {
     pub path: String,
     pub parent_path: String,
-    pub node: Span,
+    pub node_source: String,
+    pub display_position: LineAndColumnDisplay,
 }
 
 /**
@@ -88,7 +88,12 @@ fn loops_router_array(
                             let route_path_obj = RoutePathObj {
                                 path: value.text().to_string(),
                                 parent_path: path.clone(),
-                                node: deno_ast::swc::common::Spanned::span(&obj_name).clone(),
+                                node_source: obj_name.text().to_string(),
+                                display_position: LineAndColumnDisplay {
+                                    column: value.start_column(),
+                                    line: value.start_line(),
+                                    line_text: vec![obj_name.text().to_string()],
+                                },
                             };
                             context.push(route_path_obj);
                             let children_path = value.text();
@@ -108,6 +113,98 @@ fn loops_router_array(
         }
     }
     return context;
+}
+
+fn gen_diagnostic_repeat(
+    node: &RoutePathObj,
+    repeat_node: &RoutePathObj,
+    source_file_name: String,
+) -> RouteDiagnostic {
+    let mut line_text = Vec::new();
+    line_text.push(node.node_source.to_string());
+    line_text.push(repeat_node.node_source.to_string());
+
+    let mut display_position = Vec::new();
+    display_position.push(node.display_position.clone());
+    display_position.push(repeat_node.display_position.clone());
+    let route_diagnostic = RouteDiagnostic {
+        specifier: node.path.clone(),
+        display_position: display_position,
+        kind: RouterSyntaxError::Repeat,
+        source_file_name: source_file_name,
+    };
+    route_diagnostic
+}
+
+fn print_diagnostic(diagnostic: &RouteDiagnostic) {
+    if diagnostic.kind == RouterSyntaxError::Repeat {
+        print_diagnostic_repeat(diagnostic);
+    }
+    if diagnostic.kind == RouterSyntaxError::Redundancy {
+        print_diagnostic_repeat(diagnostic);
+    }
+}
+
+fn print_diagnostic_repeat(diagnostic: &RouteDiagnostic) {
+    println!("🚨 {} 重复声明，发现于以下行：", diagnostic.specifier);
+    for line_and_column in &diagnostic.display_position {
+        println!(
+            "   ---> {}:{}:{} 的 {}",
+            diagnostic.source_file_name,
+            line_and_column.line,
+            line_and_column.column,
+            line_and_column.line_text[0]
+        );
+    }
+    println!("");
+    println!("如果是父子路由，请使用 ./ 来代替",);
+    let message = "\
+    💡  更改方案：
+    {
+        path: '/user',
+        layout: false,
+        routes: [
+            {
+                path: '/user',
+                component: './user/Login',
+            },
+        ],
+    },
+
+    可以转化为 ======>
+
+    {
+        path: '/user',
+        layout: false,
+        routes: [
+            {
+                path: './',
+                component: './user/Login',
+            },
+        ],
+    },
+    
+";
+    println!("{}", message);
+}
+
+fn gen_route_diagnostic(
+    path_array: Vec<RoutePathObj>,
+    source_file_name: String,
+) -> Vec<RouteDiagnostic> {
+    let mut path_map = HashMap::new();
+    let mut route_diagnostic_array: Vec<RouteDiagnostic> = Vec::new();
+    path_array.iter().for_each(|item| {
+        if path_map.contains_key(&item.path) {
+            route_diagnostic_array.push(gen_diagnostic_repeat(
+                &item,
+                path_map.get(&item.path).unwrap(),
+                source_file_name.clone(),
+            ));
+        }
+        path_map.insert(item.path.to_string(), item.clone());
+    });
+    route_diagnostic_array
 }
 
 fn main() -> Result<(), ReadFileError> {
@@ -132,8 +229,16 @@ fn main() -> Result<(), ReadFileError> {
             path_array = loops_router_array(array_node, "/", path_array.clone());
         }
     });
-    path_array.iter().for_each(|path_item| {
-        println!("key:{},value:{}", path_item.path, path_item.parent_path);
-    });
+
+    // 生成错误并且打印出来
+    let diagnostic_list = gen_route_diagnostic(path_array, path_str);
+    if diagnostic_list.len() > 0 {
+        diagnostic_list.iter().for_each(|diagnostic| {
+            print_diagnostic(diagnostic);
+        });
+    } else {
+        println!("👍 没有发现任何问题，非常好!")
+    }
+
     Ok(())
 }
