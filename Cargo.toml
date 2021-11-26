@@ -1,5 +1,5 @@
 [package]
-name = "grrsgrrs"
+name = "route-lint"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,5 +7,5 @@ edition = "2021"
 [dependencies]
 structopt = "0.3.13"
 swc_ecmascript = { version = "0.82.0", features = ["parser"] }
-indicatif = {version = "*", features = ["rayon"]}
 deno_ast = { version = "0.4.1", features = ["transforms", "utils", "visit", "view"] }
+indicatif = {version = "*", features = ["rayon"]}
