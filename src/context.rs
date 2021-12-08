@@ -1,4 +1,14 @@
-﻿pub struct Context<'view> {
+﻿use std::time::Instant;
+
+use deno_ast::{
+    swc::common::{comments::Comment, BytePos, Span, SyntaxContext},
+    view::{RootNode, SourceFile},
+    MediaType,
+};
+
+use crate::diagnostic::{LintDiagnostic, Position, Range};
+
+pub struct Context<'view> {
     /// File name on which the lint rule is run
     file_name: String,
 
@@ -14,16 +24,7 @@
 
     /// The AST view of the program, which for example can be used for getting
     /// comments
-    program: ast_view::Program<'view>,
-
-    /// Scope analysis result
-    scope: Scope,
-
-    /// Control-flow analysis result
-    control_flow: ControlFlow,
-
-    /// The `SyntaxContext` of the top level
-    top_level_ctxt: SyntaxContext,
+    program: deno_ast::view::Program<'view>,
 }
 
 impl<'view> Context<'view> {
@@ -44,10 +45,6 @@ impl<'view> Context<'view> {
 
     pub fn all_comments(&self) -> impl Iterator<Item = &'view Comment> {
         self.program.comment_container().unwrap().all_comments()
-    }
-
-    pub fn control_flow(&self) -> &ControlFlow {
-        &self.control_flow
     }
 
     pub(crate) fn create_diagnostic(
@@ -92,10 +89,6 @@ impl<'view> Context<'view> {
             .leading_comments(lo)
     }
 
-    pub fn line_ignore_directives(&self) -> &HashMap<usize, LineIgnoreDirective> {
-        &self.line_ignore_directives
-    }
-
     pub fn media_type(&self) -> MediaType {
         self.media_type
     }
@@ -105,9 +98,7 @@ impl<'view> Context<'view> {
         file_name: String,
         media_type: MediaType,
         source_file: &'view impl SourceFile,
-        program: ast_view::Program<'view>,
-        scope: Scope,
-        control_flow: ControlFlow,
+        program: deno_ast::view::Program<'view>,
         top_level_ctxt: SyntaxContext,
     ) -> Self {
         Self {
@@ -115,27 +106,16 @@ impl<'view> Context<'view> {
             media_type,
             source_file,
             program,
-            scope,
-            control_flow,
-            top_level_ctxt,
             diagnostics: Vec::new(),
         }
     }
 
-    pub fn program(&self) -> &ast_view::Program<'view> {
+    pub fn program(&self) -> &deno_ast::view::Program<'view> {
         &self.program
-    }
-
-    pub fn scope(&self) -> &Scope {
-        &self.scope
     }
 
     pub fn source_file(&self) -> &dyn SourceFile {
         self.source_file
-    }
-
-    pub(crate) fn top_level_ctxt(&self) -> SyntaxContext {
-        self.top_level_ctxt
     }
 
     pub fn trailing_comments_at(&self, hi: BytePos) -> impl Iterator<Item = &'view Comment> {
