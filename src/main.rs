@@ -1,8 +1,5 @@
-use self::context::Context;
 use deno_ast::view::NodeTrait;
 use std::{collections::HashMap, string::String};
-use structopt::StructOpt;
-
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(StructOpt)]
 struct Cli {
@@ -128,18 +125,18 @@ fn loops_router_array(
     return context;
 }
 
-fn print_diagnostic(diagnostic: &RouteDiagnostic) {
-    if diagnostic.kind == RouteSyntaxError::Repeat {
-        print_diagnostic_repeat(diagnostic);
-    }
-    if diagnostic.kind == RouteSyntaxError::RedirectRedundancy {
-        print_diagnostic_redirect(diagnostic);
-    }
+// fn print_diagnostic(diagnostic: &RouteDiagnostic) {
+//     if diagnostic.kind == RouteSyntaxError::Repeat {
+//         print_diagnostic_repeat(diagnostic);
+//     }
+//     if diagnostic.kind == RouteSyntaxError::RedirectRedundancy {
+//         print_diagnostic_redirect(diagnostic);
+//     }
 
-    if diagnostic.kind == RouteSyntaxError::DeprecatedChildren {
-        print_diagnostic_children_key_router(diagnostic);
-    }
-}
+//     if diagnostic.kind == RouteSyntaxError::DeprecatedChildren {
+//         print_diagnostic_children_key_router(diagnostic);
+//     }
+// }
 
 fn is_warning_redirect_router(router: RoutePathObj) -> bool {
     if !router.obj_keys.contains(&String::from("redirect")) {
@@ -168,7 +165,6 @@ fn gen_route_diagnostic(
     path_array: Vec<RoutePathObj>,
     source_file_name: String,
 ) -> Vec<RouteDiagnostic> {
-    let mut path_map = HashMap::new();
     let mut route_diagnostic_array: Vec<RouteDiagnostic> = Vec::new();
     // path_array.iter().for_each(|item| {
     //     if path_map.contains_key(&item.path) {
@@ -217,8 +213,8 @@ fn main() -> Result<(), ReadFileError> {
     // 生成错误并且打印出来
     let diagnostic_list = gen_route_diagnostic(path_array, path_str.clone());
     if diagnostic_list.len() > 0 {
-        diagnostic_list.iter().for_each(|diagnostic| {
-            print_diagnostic(diagnostic);
+        diagnostic_list.iter().for_each(|_diagnostic| {
+            // print_diagnostic(diagnostic);
         });
     } else {
         println!("👍 没有发现任何问题，非常好!")
