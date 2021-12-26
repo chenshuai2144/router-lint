@@ -1,6 +1,4 @@
-﻿use std::time::Instant;
-
-use deno_ast::{
+﻿use deno_ast::{
     swc::common::{comments::Comment, BytePos, Span, SyntaxContext},
     view::{RootNode, SourceFile},
     MediaType,
@@ -54,7 +52,6 @@ impl<'view> Context<'view> {
         message: impl ToString,
         maybe_hint: Option<String>,
     ) -> LintDiagnostic {
-        let time_start = Instant::now();
         let start = Position::new(span.lo(), self.source_file.line_and_column_index(span.lo()));
         let end = Position::new(span.hi(), self.source_file.line_and_column_index(span.hi()));
 
@@ -66,7 +63,6 @@ impl<'view> Context<'view> {
             hint: maybe_hint,
         };
 
-        let time_end = Instant::now();
         diagnostic
     }
 
@@ -99,7 +95,6 @@ impl<'view> Context<'view> {
         media_type: MediaType,
         source_file: &'view impl SourceFile,
         program: deno_ast::view::Program<'view>,
-        top_level_ctxt: SyntaxContext,
     ) -> Self {
         Self {
             file_name,

@@ -1,4 +1,20 @@
-﻿fn gen_diagnostic(node: &RoutePathObj, source_file_name: String) -> RouteDiagnostic {
+﻿fn is_warning_redirect_router(router: RoutePathObj) -> bool {
+    if !router.obj_keys.contains(&String::from("redirect")) {
+        return false;
+    }
+
+    // router 如果包含 redirect，应该只有 redirect 字段和 path 字段
+    if router.obj_keys.len() > 2
+        && router.obj_keys.contains(&String::from("path"))
+        && router.obj_keys.contains(&String::from("redirect"))
+    {
+        return true;
+    }
+
+    false
+}
+
+fn gen_diagnostic(node: &RoutePathObj, source_file_name: String) -> RouteDiagnostic {
     let mut line_text = Vec::new();
     line_text.push(node.node_source.to_string());
 

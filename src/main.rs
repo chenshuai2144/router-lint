@@ -1,8 +1,11 @@
 pub mod context;
 pub mod diagnostic;
+pub mod handler;
+pub mod rules;
 
+use context::Context;
 use deno_ast::view::NodeTrait;
-use std::{collections::HashMap, string::String};
+use std::string::String;
 use structopt::StructOpt;
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(StructOpt)]
@@ -33,6 +36,9 @@ fn parse_program(
     })
 }
 
+/**
+ * 用于打印错误信息的类，里面存了原始代码
+ */
 #[derive(Clone)]
 pub struct LineAndColumnDisplay {
     // 行号
@@ -44,6 +50,10 @@ pub struct LineAndColumnDisplay {
     // 当前路由的配置
     router_source_code: String,
 }
+
+/**
+ * 错误类型的枚举
+ */
 #[derive(Clone, PartialEq)]
 pub enum RouteSyntaxError {
     // 重复的路由
@@ -56,6 +66,9 @@ pub enum RouteSyntaxError {
     LayoutComponent,
 }
 
+/**
+ * 错误信息的基础模板
+ */
 pub struct RouteDiagnostic {
     pub specifier: String,
     pub display_position: Vec<LineAndColumnDisplay>,
@@ -63,6 +76,9 @@ pub struct RouteDiagnostic {
     pub source_file_name: String,
 }
 
+/**
+ * 用于传递的基础列
+ */
 #[derive(Clone)]
 pub struct RoutePathObj {
     pub path: String,
@@ -142,29 +158,6 @@ fn loops_router_array(
 //     }
 // }
 
-fn is_warning_redirect_router(router: RoutePathObj) -> bool {
-    if !router.obj_keys.contains(&String::from("redirect")) {
-        return false;
-    }
-
-    // router 如果包含 redirect，应该只有 redirect 字段和 path 字段
-    if router.obj_keys.len() > 2
-        && router.obj_keys.contains(&String::from("path"))
-        && router.obj_keys.contains(&String::from("redirect"))
-    {
-        return true;
-    }
-
-    false
-}
-
-fn is_warning_children_key_router(router: RoutePathObj) -> bool {
-    if router.obj_keys.contains(&String::from("children")) {
-        return true;
-    }
-    false
-}
-
 fn gen_route_diagnostic(
     path_array: Vec<RoutePathObj>,
     source_file_name: String,
@@ -194,6 +187,7 @@ fn gen_route_diagnostic(
 fn main() -> Result<(), ReadFileError> {
     let args = Cli::from_args();
     let path = &args.path;
+
     // display 可以转化成需要显示的文案
     let path_str: String = path.as_path().display().to_string();
 
@@ -205,24 +199,18 @@ fn main() -> Result<(), ReadFileError> {
     let syntax = deno_ast::get_syntax(deno_ast::MediaType::TypeScript);
     // 转化为语法树
     let ast = parse_program(&path_str, syntax, content).unwrap();
-    // 定义一个 map 来存我们需要的分析数据
-    let mut path_array: Vec<RoutePathObj> = Vec::new();
+
     ast.with_view(|program| {
-        let array_node = program.children()[0].children()[0];
-        if array_node.kind() == deno_ast::view::NodeKind::ArrayLit {
-            path_array = loops_router_array(array_node, "/", path_array.clone());
-        }
+        // 生成一个context，用于存储错误信息并且被各个规则消费
+        let mut context = Context::new(
+            path_str.clone(),
+            deno_ast::MediaType::TypeScript,
+            ast.source(),
+            program,
+        );
     });
 
-    // 生成错误并且打印出来
-    let diagnostic_list = gen_route_diagnostic(path_array, path_str.clone());
-    if diagnostic_list.len() > 0 {
-        diagnostic_list.iter().for_each(|_diagnostic| {
-            // print_diagnostic(diagnostic);
-        });
-    } else {
-        println!("👍 没有发现任何问题，非常好!")
-    }
+    println!("👍 没有发现任何问题，非常好!");
 
     Ok(())
 }
