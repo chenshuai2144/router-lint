@@ -1,17 +1,15 @@
 ﻿use deno_ast::view::swc_ast;
-use deno_ast::view::Module;
-use deno_ast::view::Script;
+use deno_ast::view::Program;
 
 pub mod children_key;
+pub mod redirect;
+pub mod repeat;
 
 use crate::context::Context;
 use std::sync::Arc;
 
 #[derive()]
-pub enum Program<'a> {
-    Module(&'a Module<'a>),
-    Script(&'a Script<'a>),
-}
+
 pub enum ProgramRef<'a> {
     Module(&'a swc_ast::Module),
     Script(&'a swc_ast::Script),
@@ -45,5 +43,9 @@ pub trait LintRule: std::fmt::Debug + Send + Sync {
 }
 
 pub fn get_all_rules_raw() -> Vec<Arc<dyn LintRule>> {
-    vec![]
+    vec![
+        children_key::ChildrenKey::new(),
+        redirect::RedirectKeys::new(),
+        repeat::RepeatPath::new(),
+    ]
 }

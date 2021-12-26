@@ -1,5 +1,5 @@
 ﻿use deno_ast::{
-    swc::common::{comments::Comment, BytePos, Span, SyntaxContext},
+    swc::common::{comments::Comment, BytePos, Span},
     view::{RootNode, SourceFile},
     MediaType,
 };

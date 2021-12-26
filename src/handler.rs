@@ -215,9 +215,6 @@ pub trait Traverse: Handler {
     {
         let node = node.as_node();
 
-        // Make sure that `traverse_flow` is in initialized state
-        ctx.assert_traverse_init();
-
         // First, invoke a handler that does anything we want when _entering_ a node.
         self.on_enter_node(node, ctx);
 
@@ -390,10 +387,8 @@ pub trait Traverse: Handler {
         };
 
         // Walk the child nodes recursively.
-        if !ctx.should_stop_traverse() {
-            for child in node.children() {
-                self.traverse(child, ctx);
-            }
+        for child in node.children() {
+            self.traverse(child, ctx);
         }
 
         // Finally, invoke a handler that does anything we want when _leaving_ a node.

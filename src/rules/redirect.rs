@@ -1,45 +1,51 @@
-﻿fn is_warning_redirect_router(router: RoutePathObj) -> bool {
-    if !router.obj_keys.contains(&String::from("redirect")) {
-        return false;
+﻿use crate::handler::{Handler, Traverse};
+
+use super::{Context, LintRule, Program, ProgramRef};
+use deno_ast::{
+    swc::common::Spanned,
+    view::{self as ast_view, NodeTrait},
+};
+use std::sync::Arc;
+
+const MESSAGE: &str = "🚨 redirect 路由中应该只配置 redirect 和 path 两个属性！";
+
+#[derive(Debug)]
+pub struct RedirectKeys;
+
+const CODE: &str = "redirect-only-has-redirect-and-path";
+
+impl LintRule for RedirectKeys {
+    fn code(&self) -> &'static str {
+        CODE
     }
 
-    // router 如果包含 redirect，应该只有 redirect 字段和 path 字段
-    if router.obj_keys.len() > 2
-        && router.obj_keys.contains(&String::from("path"))
-        && router.obj_keys.contains(&String::from("redirect"))
-    {
-        return true;
+    fn lint_program<'view>(&self, _context: &mut Context<'view>, _program: ProgramRef<'view>) {
+        unreachable!();
     }
 
-    false
+    fn lint_program_with_ast_view(&self, context: &mut Context, program: Program<'_>) {
+        RedirectKeysHandler.traverse(program, context);
+    }
+
+    fn new() -> Arc<Self> {
+        Arc::new(RedirectKeys)
+    }
 }
 
-fn gen_diagnostic(node: &RoutePathObj, source_file_name: String) -> RouteDiagnostic {
-    let mut line_text = Vec::new();
-    line_text.push(node.node_source.to_string());
+struct RedirectKeysHandler;
 
-    let mut display_position = Vec::new();
-    display_position.push(node.display_position.clone());
-    let route_diagnostic = RouteDiagnostic {
-        specifier: node.path.clone(),
-        display_position: display_position,
-        kind: RouteSyntaxError::RedirectRedundancy,
-        source_file_name: source_file_name,
-    };
-    route_diagnostic
-}
-
-fn print_diagnostic(diagnostic: &RouteDiagnostic) {
-    println!("🚨 redirect 的冗余配置，发现于以下行：",);
-    for line_and_column in &diagnostic.display_position {
-        println!(
-            "   ---> {}:{}:{} 的 {}",
-            diagnostic.source_file_name,
-            line_and_column.line,
-            line_and_column.column,
-            line_and_column.router_source_code
-        );
+impl Handler for RedirectKeysHandler {
+    fn object_lit(&mut self, object_lit: &ast_view::ObjectLit, ctx: &mut Context) {
+        let obj_keys: Vec<String> = object_lit
+            .children()
+            .iter()
+            .map(|obj_name| obj_name.children()[0].text().to_string())
+            .collect();
+        if obj_keys.len() > 2
+            && obj_keys.contains(&String::from("path"))
+            && obj_keys.contains(&String::from("redirect"))
+        {
+            ctx.add_diagnostic(object_lit.span(), CODE, MESSAGE);
+        }
     }
-    println!("");
-    println!("redirect 路由中应该只配置 redirect 和 path 两个属性！",);
 }

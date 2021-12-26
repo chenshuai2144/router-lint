@@ -1,63 +1,95 @@
-﻿fn gen_diagnostic_repeat(
-    node: &RoutePathObj,
-    repeat_node: &RoutePathObj,
-    source_file_name: String,
-) -> RouteDiagnostic {
-    let mut line_text = Vec::new();
-    line_text.push(node.node_source.to_string());
-    line_text.push(repeat_node.node_source.to_string());
+﻿use crate::handler::{Handler, Traverse};
 
-    let mut display_position = Vec::new();
-    display_position.push(node.display_position.clone());
-    display_position.push(repeat_node.display_position.clone());
-    let route_diagnostic = RouteDiagnostic {
-        specifier: node.path.clone(),
-        display_position: display_position,
-        kind: RouteSyntaxError::Repeat,
-        source_file_name: source_file_name,
-    };
-    route_diagnostic
+use super::{Context, LintRule, Program, ProgramRef};
+use crate::rules::repeat::ast_view::Node::ArrayLit;
+use deno_ast::swc::common::Spanned;
+use deno_ast::view::NodeTrait;
+use deno_ast::view::{self as ast_view};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+const MESSAGE: &str = "🚨 path发现重复，可能会导致路径渲染错误，请检查后删除！";
+
+#[derive(Debug)]
+pub struct RepeatPath;
+
+const CODE: &str = "redirect-only-has-redirect-and-path";
+
+impl LintRule for RepeatPath {
+    fn code(&self) -> &'static str {
+        CODE
+    }
+
+    fn lint_program<'view>(&self, _context: &mut Context<'view>, _program: ProgramRef<'view>) {
+        unreachable!();
+    }
+
+    fn lint_program_with_ast_view(&self, context: &mut Context, program: Program<'_>) {
+        RedirectKeysHandler.traverse(program, context);
+    }
+
+    fn new() -> Arc<Self> {
+        Arc::new(RepeatPath)
+    }
 }
 
-fn print_diagnostic_repeat(diagnostic: &RouteDiagnostic) {
-    println!("🚨 {} 重复声明，发现于以下行：", diagnostic.specifier);
-    for line_and_column in &diagnostic.display_position {
-        println!(
-            "   ---> {}:{}:{} 的 {}",
-            diagnostic.source_file_name,
-            line_and_column.line,
-            line_and_column.column,
-            line_and_column.line_text[0]
-        );
+struct RedirectKeysHandler;
+
+/**
+ * 遍历routes 的结构，可能一直互相嵌套
+ */
+fn loops_router_array(
+    array_node: &ast_view::ArrayLit,
+    parent_path: &str,
+    mut context: Vec<String>,
+) -> Vec<String> {
+    for item in array_node.children() {
+        if item.kind() == deno_ast::view::NodeKind::ExprOrSpread {
+            let obj = item.children()[0];
+            for obj_name in obj.children() {
+                let mut path: String = String::from(parent_path);
+
+                if obj_name.kind() == deno_ast::view::NodeKind::KeyValueProp {
+                    let key = obj_name.children()[0];
+                    let value = obj_name.children()[1];
+                    if key.kind() == deno_ast::view::NodeKind::Ident {
+                        if key.text() == "path" {
+                            let children_path = value.text();
+                            if !children_path.starts_with("/") {
+                                path.push_str("/");
+                                path.push_str(value.text());
+                            } else {
+                                path = String::from("/");
+                            }
+                        }
+                        for child in value.children() {
+                            if let ArrayLit(n) = child {
+                                context = loops_router_array(n, &path, context.clone())
+                            }
+                        }
+                        if !path.eq("/") && path.len() > 1 {
+                            context.push(path);
+                        }
+                    }
+                }
+            }
+        }
     }
-    println!("");
-    println!("如果是父子路由，请使用 ./ 来代替",);
-    let message = "\
-    💡  更改方案：
-    {
-        path: '/user',
-        layout: false,
-        routes: [
-            {
-                path: '/user',
-                component: './user/Login',
-            },
-        ],
-    },
+    return context;
+}
 
-    可以转化为 ======>
-
-    {
-        path: '/user',
-        layout: false,
-        routes: [
-            {
-                path: './',
-                component: './user/Login',
-            },
-        ],
-    },
-    
-";
-    println!("{}", message);
+impl Handler for RedirectKeysHandler {
+    fn array_lit(&mut self, array_lit: &ast_view::ArrayLit, ctx: &mut Context) {
+        // 遍历dom，获取所有的 path
+        let path_array: Vec<String> = loops_router_array(array_lit, "", vec![]);
+        let mut path_map: HashMap<String, bool> = HashMap::new();
+        // 判断是否有重复的path
+        for path in path_array {
+            if path_map.contains_key(&path) {
+                ctx.add_diagnostic(array_lit.span(), CODE, MESSAGE);
+            } else {
+                path_map.insert(path, true);
+            }
+        }
+    }
 }
