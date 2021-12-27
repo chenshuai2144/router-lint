@@ -9,7 +9,12 @@ export default [
         routes: [
           {
             name: 'login',
-            path: '/user/login',
+            path: './login',
+            component: './user/Login',
+          },
+          {
+            name: 'login',
+            path: './login',
             component: './user/Login',
           },
         ],
@@ -52,6 +57,7 @@ export default [
   {
     path: '/',
     redirect: '/welcome',
+    component: './404',
   },
   {
     component: './404',

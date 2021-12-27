@@ -9,3 +9,6 @@ structopt = "0.3.13"
 swc_ecmascript = { version = "0.82.0", features = ["parser"] }
 deno_ast = { version = "0.4.1", features = ["transforms", "utils", "visit", "view"] }
 indicatif = {version = "*", features = ["rayon"]}
+serde = { version = "1.0.125", features = ["derive"] }
+serde_json = "1.0.64"
+annotate-snippets = { version = "0.9.1", features = ["color"] }
