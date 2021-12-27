@@ -4,6 +4,7 @@ pub mod handler;
 pub mod rules;
 
 use context::Context;
+use diagnostic::display_diagnostics;
 use std::string::String;
 use structopt::StructOpt;
 
@@ -71,9 +72,7 @@ fn main() -> Result<(), ReadFileError> {
             println!("👍 没有发现任何问题，非常好!");
         }
 
-        for diagnostic in context.diagnostics() {
-            println!("{}", diagnostic.message);
-        }
+        display_diagnostics(&context.diagnostics(), ast.source());
     });
 
     Ok(())
