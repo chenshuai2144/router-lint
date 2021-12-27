@@ -7,7 +7,7 @@
 ## 不要使用 children 改为使用 routes
 ```bash
 
-error[no-use-children]: 🚨 不应该使用 children 来配置子路由, children 已经废弃，请属于 routes 来代替！
+error[no-use-children]: 🚨 不应该使用 children 来配置子路由, children 已经废弃，请使用 routes 来代替！
   --> .\routes.ts:33:3
    |
 33 |     {
