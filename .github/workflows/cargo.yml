@@ -1,0 +1,82 @@
+name: Cargo
+
+on: [push, pull_request]
+
+env:
+  CI: 1
+  CARGO_INCREMENTAL: 0
+  RUST_LOG: "debug"
+
+jobs:
+  check-license:
+    name: Check license
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+
+      - name: Install required tools
+        run: |
+          cargo install cargo-deny
+
+      - name: Check licenses
+        run: |
+          cargo deny check
+
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    env:
+      RUST_LOG: "0"
+    steps:
+      - uses: actions/checkout@v2
+
+      # We explicitly do this to cache properly.
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+  check:
+    name: Check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-10.15
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      # We explicitly do this to cache properly.
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/
+            target
+            Cargo.lock
+          key: cargo-dev--${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-dev--${{ runner.os }}
+
+      # Ensure that all components are compilable.
+      - name: Run cargo check for all targets
+        run: cargo check --color always --all --all-targets
