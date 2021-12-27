@@ -8,7 +8,7 @@ use deno_ast::{
 use std::sync::Arc;
 
 const MESSAGE: &str =
-    "🚨 不应该使用 children 来配置子路由, children 已经废弃，请属于 routes 来代替！";
+    "🚨 不应该使用 children 来配置子路由, children 已经废弃，请使用 routes 来代替！";
 
 #[derive(Debug)]
 pub struct ChildrenKey;
